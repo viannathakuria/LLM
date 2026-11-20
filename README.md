@@ -39,9 +39,29 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
+The requirements install the sibling `model` package with its existing
+`model` extra into the backend environment. Set `MYLLM_CHECKPOINT_DIR` in
+`backend/.env` to a trained checkpoint directory; the example path is relative
+to `backend/`. If no valid checkpoint is configured, the backend still serves
+`/health` and returns HTTP 503 for generation.
+
 The API is available at <http://localhost:8000>; its health endpoint is
 <http://localhost:8000/health>. Interactive API documentation is at
 <http://localhost:8000/docs>.
+
+Generate text with:
+
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Once upon a time","max_new_tokens":80,"temperature":0.8}'
+```
+
+The response contains `generated_text`, including the prompt and generated
+suffix. The API accepts 0–256 new tokens and finite, non-negative temperatures;
+temperature `0` selects greedy generation.
+For an 8 GB MacBook Air, use the default single Uvicorn worker; each worker
+loads its own model copy.
 
 Run backend tests from `backend/` with:
 
@@ -277,10 +297,10 @@ The model runs in evaluation and inference modes during generation and restores
 its original training/evaluation mode afterward. It keeps only the most recent
 tokens up to the checkpoint's context length. The character-level model has no
 end-of-sequence token, so generation stops at the requested token limit; the
-small model may produce low-quality or repetitive text. This command does not
-connect to FastAPI or the frontend, which still returns clearly labeled
-placeholder responses. Generation tests use local synthetic checkpoints and
-do not download datasets or model weights.
+small model may produce low-quality or repetitive text. The CLI remains
+standalone; the backend exposes a separate endpoint, while the frontend
+still returns clearly labeled placeholder responses. Generation tests use
+local synthetic checkpoints and do not download datasets or model weights.
 
 ### Frontend
 
@@ -311,25 +331,27 @@ npm run build
   the backend health check. `NEXT_PUBLIC_` values are exposed to the browser and
   must not contain secrets.
 - `backend/.env.example` sets `MYLLM_CORS_ORIGINS`, a comma-separated list of
-  browser origins allowed to call the API.
+  browser origins allowed to call the API, and `MYLLM_CHECKPOINT_DIR`, the
+  local model checkpoint directory loaded by the backend.
 
 Keep local `.env` files out of version control. Neither service needs API keys.
 
 ## Current limitations
 
 - The chat interface returns a fixed placeholder message, not generated text.
-- The backend currently provides a health check only.
+- The backend exposes `/generate` for a configured local checkpoint; its
+  health endpoint remains available even when no checkpoint is configured.
 - Conversation history is held only in the current browser page and is not
   persisted.
 - The tokenizer does not train or generate text; it supplies character
   vocabularies to the separate model package.
 - The tiny Transformer starts with random weights and must be trained on
   prepared local data before its generated text is useful. Standalone
-  generation is available, but inference API and chatbot integration remain
-  out of scope.
+  generation and the backend API are available, but frontend chatbot
+  integration remains out of scope.
 
 ## Next milestone
 
-Consider integrating the standalone generator with a separate inference
-service in a future milestone. Do not present an existing pretrained model as
-a MyLLM-trained model; review dataset licenses before using any training data.
+Connect the frontend chat interface to the backend generation endpoint in a
+future milestone. Do not present an existing pretrained model as a
+MyLLM-trained model; review dataset licenses before using any training data.

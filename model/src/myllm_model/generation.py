@@ -86,7 +86,7 @@ def _sample_token(
     if config.temperature == 0:
         return int(torch.argmax(logits).item())
 
-    cpu_logits = logits.detach().to(device="cpu", dtype=torch.float64)
+    cpu_logits = logits.detach().to(device="cpu").to(dtype=torch.float64)
     scaled_logits = cpu_logits / config.temperature
     if not torch.isfinite(scaled_logits).all().item():
         raise ValueError("temperature is too small for stable sampling")
