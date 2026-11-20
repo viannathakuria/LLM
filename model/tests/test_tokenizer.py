@@ -70,6 +70,16 @@ def test_save_and_load_preserve_vocabulary(tmp_path) -> None:
             "Unsupported vocabulary format version",
         ),
         (
+            '{"format_version": 2, "format_version": 1, '
+            '"unknown_token_id": 0, "characters": ["a"]}',
+            "Duplicate key in vocabulary JSON",
+        ),
+        (
+            '{"format_version": 1, "unknown_token_id": 0, '
+            '"characters": ["a"], "characters": ["b"]}',
+            "Duplicate key in vocabulary JSON",
+        ),
+        (
             json.dumps(
                 {
                     "format_version": 1,

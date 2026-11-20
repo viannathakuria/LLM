@@ -12,6 +12,17 @@ class VocabularyFormatError(ValueError):
     """Raised when a saved tokenizer vocabulary is invalid or unsupported."""
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise VocabularyFormatError(
+                f"Duplicate key in vocabulary JSON: {key}"
+            )
+        result[key] = value
+    return result
+
+
 class CharacterTokenizer:
     """Map Unicode code points to stable IDs, reserving zero for unknowns."""
 
@@ -86,7 +97,10 @@ class CharacterTokenizer:
     def load(cls, path: str | Path) -> "CharacterTokenizer":
         """Load and validate a previously saved vocabulary."""
         try:
-            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            payload = json.loads(
+                Path(path).read_text(encoding="utf-8"),
+                object_pairs_hook=_reject_duplicate_keys,
+            )
         except json.JSONDecodeError as error:
             raise VocabularyFormatError("Vocabulary file is not valid JSON") from error
 
