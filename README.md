@@ -4,8 +4,8 @@ MyLLM is the foundation for an independently built GPT-style language model and
 chat application. This first milestone contains a Next.js frontend and a FastAPI
 backend. **The chat responses are placeholders; no language model is connected.**
 
-There are no external AI APIs, pretrained models, or training code in this
-project.
+There are no external AI APIs or pretrained models in this project. Model
+training runs only when explicitly started with a prepared local dataset.
 
 ## Project structure
 
@@ -164,9 +164,9 @@ with torch.no_grad():
 print(logits.shape)  # [2, 5, tokenizer.vocabulary_size]
 ```
 
-The model accepts sequences up to the configured context length. It does not
-train, generate text, load pretrained weights, or call external AI APIs. Run
-the offline model and tokenizer tests from `model/` with:
+The model accepts sequences up to the configured context length. It starts with
+random weights; generation, pretrained weights, and external AI APIs are not
+used. Run the offline model and tokenizer tests from `model/` with:
 
 ```bash
 python -m pytest
@@ -174,6 +174,70 @@ python -m pytest
 
 These tests use synthetic/local token IDs and do not download datasets or
 weights.
+
+### Training
+
+Training requires an already prepared dataset directory; it never downloads a
+dataset automatically. To prepare the default WikiText sample, follow the
+dataset preparation instructions above. For datasets already prepared locally,
+the Hugging Face `data` extra is not needed.
+
+From `model/`, start a small training run with:
+
+```bash
+python -m myllm_model.train \
+  --dataset-dir ../datasets/wikitext-2 \
+  --output-dir ../checkpoints/wikitext-small \
+  --learning-rate 0.0003 \
+  --batch-size 4 \
+  --steps 100 \
+  --eval-frequency 10 \
+  --seed 42 \
+  --weight-decay 0.01 \
+  --context-length 64
+```
+
+The CLI also accepts `--num-steps` as an alias for `--steps`. Training uses
+AdamW, deterministically shuffles windows using the seed, advances through
+each record with stride equal to the context length, and never joins separate
+records. A window contains up to `context_length + 1` IDs; its input excludes
+the final ID and its target excludes the first. Batches are right-padded with
+valid token ID `0`; padded targets use ignore index `-100`, so padding does not
+contribute to cross-entropy. Records shorter than two tokens are counted and
+skipped; a split with no usable token pairs is an error.
+
+At each evaluation interval and at the final step, the CLI reports training
+and validation loss over their complete, separate splits. Both are evaluated
+with dropout disabled and weighted by the number of unmasked target tokens.
+Only individual batches are moved to the runtime-selected MPS or CPU device.
+Training settings can be changed with `--learning-rate`, `--batch-size`,
+`--steps`, `--eval-frequency`, `--seed`, and `--weight-decay`; the architecture
+context can be changed with `--context-length`.
+
+`--output-dir` must be a new or empty directory. A checkpoint contains:
+
+```text
+model.pt          PyTorch state_dict only, loaded with weights_only=True
+config.json       Versioned Transformer and training configuration
+vocabulary.json   Existing versioned CharacterTokenizer format
+metadata.json     Format version, completed steps, loss history, skipped counts
+```
+
+Load and validate a checkpoint with:
+
+```python
+from myllm_model import load_checkpoint
+
+checkpoint = load_checkpoint("../checkpoints/wikitext-small")
+model = checkpoint.model
+tokenizer = checkpoint.tokenizer
+```
+
+The loader validates checkpoint versions, configuration, vocabulary size,
+training metadata, and the final evaluation step before loading model weights.
+It does not add text generation or chatbot integration. Training tests use
+tiny local datasets and perform only a few optimizer steps; they do not
+download datasets or model weights.
 
 ### Frontend
 
@@ -215,11 +279,11 @@ Keep local `.env` files out of version control. Neither service needs API keys.
 - Conversation history is held only in the current browser page and is not
   persisted.
 - The tokenizer does not train a model or generate text.
-- The tiny Transformer is randomly initialized and only runs a forward pass;
-  training, generation, checkpoints, and an inference API remain out of scope.
+- The tiny Transformer is randomly initialized and can be trained on prepared
+  local data; text generation and an inference API remain out of scope.
 
 ## Next milestone
 
-Implement a small-scale training loop for the custom Transformer. Do not present
-an existing pretrained model as a MyLLM-trained model; review dataset licenses
-before using any training data.
+Add standalone text generation for the trained custom Transformer. Do not
+present an existing pretrained model as a MyLLM-trained model; review dataset
+licenses before using any training data.
