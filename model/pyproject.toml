@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "myllm-tokenizer"
 version = "0.1.0"
-description = "Character-level tokenizer for MyLLM"
+description = "Tokenizer and tiny Transformer model for MyLLM"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -15,6 +15,9 @@ data = [
 ]
 dev = [
     "pytest>=8,<10",
+]
+model = [
+    "torch>=2.1",
 ]
 
 [tool.pytest.ini_options]
