@@ -70,6 +70,45 @@ The vocabulary is built deterministically from the Unicode code points in the
 provided text. Unknown characters encode as token ID `0` and decode as `�`.
 Vocabulary files use a versioned JSON format.
 
+### Dataset preparation
+
+Install the optional Hugging Face loader and test dependencies from `model/`:
+
+```bash
+python -m pip install -e ".[data,dev]"
+```
+
+The default example uses the `Salesforce/wikitext` dataset,
+`wikitext-2-raw-v1` configuration, and its `train` split. It processes at most
+1,000 source rows unless `max_examples` is changed. The raw subset is about
+7.7 MB to download; the row limit bounds preparation, not the initial dataset
+download or cache. The dataset card's licensing section states CC BY-SA 4.0;
+its metadata also lists CC BY-SA 3.0 and GFDL.
+Review the current [dataset card](https://huggingface.co/datasets/Salesforce/wikitext)
+and applicable terms before using the data downstream. Dataset downloads and
+prepared output are not committed; the example output path is covered by the
+repository's `datasets/` ignore rule.
+
+From `model/`, prepare the default dataset with:
+
+```bash
+python -c 'from myllm_tokenizer.dataset import prepare_hf_dataset; prepare_hf_dataset("../datasets/wikitext-2", validation_fraction=0.1, seed=42, max_examples=1000)'
+```
+
+The output directory contains `train.jsonl` and `validation.jsonl`, one
+`{"input_ids": [...]}` record per line, plus `vocabulary.json` and
+`metadata.json`. Load and validate it with:
+
+```python
+from myllm_tokenizer.dataset import load_prepared_dataset
+
+prepared = load_prepared_dataset("../datasets/wikitext-2")
+```
+
+The split is by text record, reproducible from its seed, and uses a vocabulary
+built from training text only. Local/offline unit tests use sample rows and do
+not download the Hugging Face dataset.
+
 ### Frontend
 
 In another terminal, from the repository root:
