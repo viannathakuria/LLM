@@ -12,6 +12,7 @@ project.
 ```text
 frontend/   Next.js App Router application (TypeScript, Tailwind CSS)
 backend/    FastAPI application and pytest tests
+model/      Independent Python package for tokenizer and model development
 ```
 
 The frontend checks the backend health endpoint. Chat submissions are handled
@@ -47,6 +48,27 @@ Run backend tests from `backend/` with:
 ```bash
 python -m pytest
 ```
+
+### Model and tokenizer
+
+The tokenizer is a standalone Python package with no runtime dependencies. Set
+it up from the repository root with:
+
+```bash
+cd model
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+Its tests and package are independent of the FastAPI backend. The tokenizer
+builds and saves vocabularies but does not train or load a Transformer.
+
+The vocabulary is built deterministically from the Unicode code points in the
+provided text. Unknown characters encode as token ID `0` and decode as `�`.
+Vocabulary files use a versioned JSON format.
 
 ### Frontend
 
@@ -87,11 +109,12 @@ Keep local `.env` files out of version control. Neither service needs API keys.
 - The backend currently provides a health check only.
 - Conversation history is held only in the current browser page and is not
   persisted.
-- Training, datasets, model checkpoints, and inference are intentionally out of
-  scope for this foundation.
+- The tokenizer does not train a model or generate text.
+- Transformer training, datasets, model checkpoints, and inference remain out
+  of scope.
 
 ## Next milestone
 
-Build and test MyLLM's own small Transformer and tokenizer in a separate
-training/model component. Do not present an existing pretrained model as a
-MyLLM-trained model; review dataset licenses before using any training data.
+Build and test MyLLM's own small Transformer in the separate `model/` component.
+Do not present an existing pretrained model as a MyLLM-trained model; review
+dataset licenses before using any training data.
