@@ -51,8 +51,8 @@ python -m pytest
 
 ### Model and tokenizer
 
-The tokenizer is a standalone Python package with no runtime dependencies. Set
-it up from the repository root with:
+The tokenizer remains usable without PyTorch or Hugging Face dependencies. Set
+up the tokenizer and its tests from the repository root with:
 
 ```bash
 cd model
@@ -60,11 +60,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-python -m pytest
+python -m pytest tests/test_tokenizer.py
 ```
 
 Its tests and package are independent of the FastAPI backend. The tokenizer
-builds and saves vocabularies but does not train or load a Transformer.
+builds and saves vocabularies; the Transformer is provided separately by the
+`myllm_model` package. The command above runs tokenizer-only tests without
+installing PyTorch.
 
 The vocabulary is built deterministically from the Unicode code points in the
 provided text. Unknown characters encode as token ID `0` and decode as `�`.
@@ -109,6 +111,70 @@ The split is by text record, reproducible from its seed, and uses a vocabulary
 built from training text only. Local/offline unit tests use sample rows and do
 not download the Hugging Face dataset.
 
+### Tiny Transformer
+
+Install PyTorch and the development dependencies from `model/`:
+
+```bash
+cd model
+python -m pip install -e ".[model,dev]"
+```
+
+On an Apple Silicon Mac (including M2), use Python 3.11 or newer in a native
+arm64 virtual environment. The standard PyPI PyTorch package includes MPS
+support; no separate MPS package is needed. Verify whether MPS is available:
+
+```bash
+python -c 'import torch; print(torch.__version__); print(torch.backends.mps.is_available())'
+```
+
+MyLLM detects MPS availability at runtime and uses CPU when MPS is unavailable.
+See the [official PyTorch installation selector](https://pytorch.org/get-started/locally/)
+if you need platform-specific installation guidance. The model dependency is an
+optional extra, so tokenizer-only installations remain lightweight.
+
+The model is a decoder-only Transformer with learned token and position
+embeddings, causal multi-head self-attention, pre-layer normalization, residual
+connections, and GELU feed-forward layers. Its defaults are 2 layers, 2 heads,
+embedding dimension 64, context length 64, and recommended batch size 4. The
+batch size is a starting point for future training code; the model forward pass
+accepts any non-empty batch. The weights are randomly initialized and the
+forward pass returns logits only.
+
+From `model/`, for example:
+
+```python
+import torch
+
+from myllm_model import TinyGPT, TransformerConfig, select_device
+from myllm_tokenizer import CharacterTokenizer
+
+tokenizer = CharacterTokenizer.from_text("hello world")
+config = TransformerConfig(vocab_size=tokenizer.vocabulary_size)
+device = select_device()
+model = TinyGPT(config).to(device).eval()
+batch = torch.tensor(
+    [tokenizer.encode("hello"), tokenizer.encode("world")],
+    dtype=torch.long,
+).to(device)
+
+with torch.no_grad():
+    logits = model(batch)
+
+print(logits.shape)  # [2, 5, tokenizer.vocabulary_size]
+```
+
+The model accepts sequences up to the configured context length. It does not
+train, generate text, load pretrained weights, or call external AI APIs. Run
+the offline model and tokenizer tests from `model/` with:
+
+```bash
+python -m pytest
+```
+
+These tests use synthetic/local token IDs and do not download datasets or
+weights.
+
 ### Frontend
 
 In another terminal, from the repository root:
@@ -149,11 +215,11 @@ Keep local `.env` files out of version control. Neither service needs API keys.
 - Conversation history is held only in the current browser page and is not
   persisted.
 - The tokenizer does not train a model or generate text.
-- Transformer training, datasets, model checkpoints, and inference remain out
-  of scope.
+- The tiny Transformer is randomly initialized and only runs a forward pass;
+  training, generation, checkpoints, and an inference API remain out of scope.
 
 ## Next milestone
 
-Build and test MyLLM's own small Transformer in the separate `model/` component.
-Do not present an existing pretrained model as a MyLLM-trained model; review
-dataset licenses before using any training data.
+Implement a small-scale training loop for the custom Transformer. Do not present
+an existing pretrained model as a MyLLM-trained model; review dataset licenses
+before using any training data.
