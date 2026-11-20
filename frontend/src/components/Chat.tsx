@@ -2,7 +2,7 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { BackendStatus } from "@/components/BackendStatus";
-import { createPlaceholderResponse } from "@/lib/chat";
+import { generateText } from "@/lib/api";
 
 type Message = {
   id: number;
@@ -19,28 +19,58 @@ export function Chat() {
     },
   ]);
   const [draft, setDraft] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const nextMessageId = useRef(1);
+  const submissionInProgress = useRef(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
 
-    if (!text) {
+    if (!text || submissionInProgress.current) {
       return;
     }
 
-    const messageId = nextMessageId.current;
+    submissionInProgress.current = true;
+    const userMessageId = nextMessageId.current;
+    const assistantMessageId = userMessageId + 1;
     nextMessageId.current += 2;
     setMessages((current) => [
       ...current,
-      { id: messageId, role: "user", text },
+      { id: userMessageId, role: "user", text },
       {
-        id: messageId + 1,
+        id: assistantMessageId,
         role: "assistant",
-        text: createPlaceholderResponse(),
+        text: "Generating response...",
       },
     ]);
     setDraft("");
+    setIsLoading(true);
+
+    try {
+      const generatedText = await generateText(text);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId
+            ? { ...message, text: generatedText }
+            : message,
+        ),
+      );
+    } catch {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                text: "Sorry, I couldn't generate a response right now. Please try again.",
+              }
+            : message,
+        ),
+      );
+    } finally {
+      submissionInProgress.current = false;
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -58,11 +88,12 @@ export function Chat() {
       <section
         aria-label="Conversation"
         aria-live="polite"
+        aria-busy={isLoading}
         className="flex-1 space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"
       >
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Demo only: responses are fixed placeholders. No AI model or external AI
-          service is connected.
+          Replies use the configured local MyLLM model. No external AI service is
+          connected.
         </p>
         {messages.map((message) => (
           <article
@@ -74,7 +105,7 @@ export function Chat() {
             key={message.id}
           >
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-70">
-              {message.role === "user" ? "You" : "MyLLM placeholder"}
+              {message.role === "user" ? "You" : "MyLLM"}
             </p>
             <p className="whitespace-pre-wrap text-sm leading-6">
               {message.text}
@@ -97,7 +128,7 @@ export function Chat() {
         />
         <button
           className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!draft.trim()}
+          disabled={isLoading || !draft.trim()}
           type="submit"
         >
           Send
