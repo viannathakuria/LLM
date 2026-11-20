@@ -235,9 +235,52 @@ tokenizer = checkpoint.tokenizer
 
 The loader validates checkpoint versions, configuration, vocabulary size,
 training metadata, and the final evaluation step before loading model weights.
-It does not add text generation or chatbot integration. Training tests use
-tiny local datasets and perform only a few optimizer steps; they do not
-download datasets or model weights.
+Training tests use tiny local datasets and perform only a few optimizer steps;
+they do not download datasets or model weights.
+
+### Text generation
+
+Generation is a standalone model-package command. It loads the existing
+validated checkpoint format, using the checkpoint's model configuration and
+vocabulary. From `model/`, install the model extra if it is not already
+installed:
+
+```bash
+python -m pip install -e ".[model]"
+```
+
+Generate text from a trained checkpoint with:
+
+```bash
+python -m myllm_model.generate \
+  --checkpoint-dir ../checkpoints/wikitext-small \
+  --prompt "Once upon a time" \
+  --max-new-tokens 80 \
+  --temperature 0.8 \
+  --top-k 20 \
+  --seed 42
+```
+
+`--checkpoint-dir` and a non-empty `--prompt` are required. Generation uses
+the checkpoint's vocabulary to encode the prompt and decode the generated
+suffix; prompt characters outside the vocabulary map to the tokenizer's
+unknown token. `--max-new-tokens` sets the exact maximum number of new
+characters (default `100`; `0` returns the prompt unchanged). A temperature of
+`0` uses greedy selection; a positive temperature samples from the model's
+probabilities. `--top-k` optionally limits sampling to the most likely
+candidate characters and must not exceed the vocabulary size. `--seed` makes
+sampling reproducible on the same device/runtime. Seeded sampling uses a local
+CPU random generator for compatibility with both CPU and Apple MPS model
+inference; cross-device output is not guaranteed to match.
+
+The model runs in evaluation and inference modes during generation and restores
+its original training/evaluation mode afterward. It keeps only the most recent
+tokens up to the checkpoint's context length. The character-level model has no
+end-of-sequence token, so generation stops at the requested token limit; the
+small model may produce low-quality or repetitive text. This command does not
+connect to FastAPI or the frontend, which still returns clearly labeled
+placeholder responses. Generation tests use local synthetic checkpoints and
+do not download datasets or model weights.
 
 ### Frontend
 
@@ -278,12 +321,15 @@ Keep local `.env` files out of version control. Neither service needs API keys.
 - The backend currently provides a health check only.
 - Conversation history is held only in the current browser page and is not
   persisted.
-- The tokenizer does not train a model or generate text.
-- The tiny Transformer is randomly initialized and can be trained on prepared
-  local data; text generation and an inference API remain out of scope.
+- The tokenizer does not train or generate text; it supplies character
+  vocabularies to the separate model package.
+- The tiny Transformer starts with random weights and must be trained on
+  prepared local data before its generated text is useful. Standalone
+  generation is available, but inference API and chatbot integration remain
+  out of scope.
 
 ## Next milestone
 
-Add standalone text generation for the trained custom Transformer. Do not
-present an existing pretrained model as a MyLLM-trained model; review dataset
-licenses before using any training data.
+Consider integrating the standalone generator with a separate inference
+service in a future milestone. Do not present an existing pretrained model as
+a MyLLM-trained model; review dataset licenses before using any training data.
