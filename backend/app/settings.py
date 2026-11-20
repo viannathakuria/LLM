@@ -21,3 +21,10 @@ def get_cors_origins() -> list[str]:
         raise ValueError("MYLLM_CORS_ORIGINS must contain at least one origin")
 
     return origins
+
+
+def get_checkpoint_dir() -> Path | None:
+    configured_directory = os.getenv("MYLLM_CHECKPOINT_DIR", "").strip()
+    if not configured_directory:
+        return None
+    return Path(configured_directory).expanduser()
